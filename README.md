@@ -8,7 +8,8 @@
 - We should be able to do structural typing on everything here
 - No shadowing/redifinition/mutability
 
-Builtins
+## Builtins
+
 `Macro "` parses a linked list of appropriate symbols
 ```
 'Head: {},
