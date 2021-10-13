@@ -24,6 +24,7 @@ Functional
 'Functional: {
     'List: {},
     'Acc: {},
+    'Fn: {},
     'Fold: {
         {List: Nil, Acc: `a}: a
         {List: {Head: `h, Next: `n}, Acc: `a, Fn: `f}: Fold.{ List: n, Acc: f.{Acc: a, Head: h}, Fn: f }
