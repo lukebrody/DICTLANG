@@ -21,6 +21,7 @@ Builtins
 Functional
 ```
 'Functional: {
+    'List: {},
     'Acc: {},
     'Fold: {
         {List: Nil, Acc: `a}: a
