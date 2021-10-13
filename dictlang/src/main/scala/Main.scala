@@ -1,5 +1,9 @@
-@main def hello: Unit = 
-  println("Hello world!")
-  println(msg)
+import scala.io.StdIn.readLine
 
-def msg = "I was compiled by Scala 3. :)"
+@main def hello: Unit = {
+  while (true) {
+      val input = readLine()
+      val tokens = tokenize(input)
+      println(tokens)
+  }
+}
