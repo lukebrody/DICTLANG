@@ -129,8 +129,8 @@ functional.dl
     'num: {},
     'add: {
         {A: { hi: `ha, lo: `la }, B: { hi: `hb, lo: `lb }, carry: `c}: {
-            lores: fullAdder.{A: la, B: lb, carry: c},
-            hires: add.{A: ha, B: hb, carry: lores.carry},
+            'lores: fullAdder.{A: la, B: lb, carry: c},
+            'hires: add.{A: ha, B: hb, carry: lores.carry},
             num: {
                 lo: lowres.sum,
                 hi: hires.num,
