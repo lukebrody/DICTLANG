@@ -106,16 +106,10 @@ object Dict {
 case class PatternDict(dict: Map[Pattern, Pattern]) extends Pattern
 
 object PatternDict {
-  def parse(tokens: Seq[Token]): ParseResult[PatternDict] = for {
-    Success(key, rest) <- tokens match {
-      case Seq(OpenBracket, rest @ _*) => Pattern.parse(rest)
-      case _                           => Failure
+  def parse(tokens: Seq[Token]): ParseResult[PatternDict] =
+    Dict.parse(Pattern.parse, Pattern.parse)(tokens).map { case Success(results, rest) =>
+      Success(PatternDict(results.toMap), rest)
     }
-    (value, rest) <- rest match {
-      case Seq(Colon, rest @ _*) => Pattern.parse(rest)
-      case _                     => Failure
-    }
-  } yield ???
 }
 
 object Pattern {
