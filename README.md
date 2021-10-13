@@ -84,7 +84,7 @@ functional.dl
         },
     },
     
-    _ = Macro."1001" // { hi: { hi: { hi: { hi: Nil, lo: 1 }, lo: 0 }, lo: 0}, lo: 1}
+    macroTest: Macro."1001" // { hi: { hi: { hi: { hi: Nil, lo: 1 }, lo: 0 }, lo: 0}, lo: 1}
     
     'And: {
         {A: 0, B: 0}: 0,
@@ -93,7 +93,7 @@ functional.dl
         {A: 1, B: 1}: 1,
     },
     
-    _ = And.{A: 0, B: 1}, // 0
+    andTest: And.{A: 0, B: 1}, // 0
     
     'Xor: {
         {A: 0, B: 0}: 0,
@@ -102,7 +102,7 @@ functional.dl
         {A: 1, B: 1}: 0,
     },
     
-    _ = Xor.{A: 0, B: 1}, // 1
+    xorTest: Xor.{A: 0, B: 1}, // 1
     
     'Or: {
         {A: 0, B: 0}: 0,
