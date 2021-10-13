@@ -10,31 +10,61 @@
 
 ## Builtins
 
-`Macro "` parses a linked list of appropriate symbols
+`Macro.""` parses a linked list of appropriate symbols
 ```
 'Head: {},
 'Next: {},
 'Nil: {},
 ```
+`Import."filename.dl"` imports a file
 
 ## Examples
 
-Functional
+### Functional
+
+functional.dl
 ```
-'Functional: {
+{
     'List: {},
     'Acc: {},
     'Fn: {},
     'Fold: {
-        {List: Nil, Acc: `a}: a
+        {List: Nil, Acc: `a, Fn: `f}: a,
         {List: {Head: `h, Next: `n}, Acc: `a, Fn: `f}: Fold.{ List: n, Acc: f.{Acc: a, Head: h}, Fn: f }
+    },
+    'Map: {
+        {List: Nil, Fn: `f}: Nil,
+        {List: {Head: `h, Next: `n}, Fn: `f}: { Head: f.h, Next: Map.{ List: n, Fn: f } },
+    },
+    'FoldReverse: {
+        {List: Nil, Acc: `a,  Fn: `f}: a,
+        {List: {Head: `h, Next: `n}, Acc: `a, Fn: `f}: f.{Acc: Fold.{ List: n, Acc: a, Fn: f }, Head: h},
     },
 },
 ```
 
-Bits, bitstrings
+### Reverse a list
+
 ```
 {
+    'f: Import."functional.dl",
+    'ReverseList: {
+        `list: f.Fold.{
+            f.List: list, 
+            f.Acc: Nil, 
+            f.Fn: {
+                { f.Acc: `a, Head: `h }: { Head: h, Next: a }
+            },
+        },
+    },
+},
+```
+
+### Bits, bitstrings
+```
+{
+    'f: Import."functional.dl",
+    
     '0: {},
     '1: {},
     'A: {},
@@ -43,18 +73,18 @@ Bits, bitstrings
     'hi: {},
     
     'Macro: {
-        `nums: Functional.Fold.{
-            List: nums, 
-            Acc: Nil,
-            Fn: {
+        `nums: f.Fold.{
+            f.List: nums, 
+            f.Acc: Nil,
+            f.Fn: {
                 // Can't just pass Head, otherwise type is unbound
-                {Acc: `h, Head: 0}: { hi: h, lo: 0 },
-                {Acc: `h, Head: 1}: { hi: h, lo: 1 },
+                {f.Acc: `h, Head: 0}: { hi: h, lo: 0 },
+                {f.Acc: `h, Head: 1}: { hi: h, lo: 1 },
             },
         },
     },
     
-    _ = Macro "1001" // { hi: { hi: { hi: { hi: Nil, lo: 1 }, lo: 0 }, lo: 0}, lo: 1}
+    _ = Macro."1001" // { hi: { hi: { hi: { hi: Nil, lo: 1 }, lo: 0 }, lo: 0}, lo: 1}
     
     'And: {
         {A: 0, B: 0}: 0,
@@ -63,7 +93,7 @@ Bits, bitstrings
         {A: 1, B: 1}: 1,
     },
     
-    _ = And.{A: 0, B: 1} // 0
+    _ = And.{A: 0, B: 1}, // 0
     
     'Xor: {
         {A: 0, B: 0}: 0,
@@ -72,7 +102,7 @@ Bits, bitstrings
         {A: 1, B: 1}: 0,
     },
     
-    _ = Xor.{A: 0, B: 1} // 1
+    _ = Xor.{A: 0, B: 1}, // 1
     
     'Or: {
         {A: 0, B: 0}: 0,
@@ -93,7 +123,7 @@ Bits, bitstrings
             hi: halfAdder.{A: low.sum, B: c},
             sum: high.sum,
             carry: Or.{A: low.carry, B: high.carry},
-        }
+        },
     },
     
     'num: {},
