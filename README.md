@@ -6,6 +6,7 @@
 - Keys that start with capital letters are exported
 - \` binds in pattern matching
 - We should be able to do structural typing on everything here
+- No shadowing/redifinition/mutability
 
 System
 ```
