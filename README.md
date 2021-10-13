@@ -8,17 +8,20 @@
 - We should be able to do structural typing on everything here
 - No shadowing/redifinition/mutability
 
-System
+Builtins
+`Macro "` parses a linked list of appropriate symbols
 ```
 'Head: {},
 'Next: {},
-'Acc: {},
 'Nil: {},
 ```
+
+## Examples
 
 Functional
 ```
 'Functional: {
+    'Acc: {},
     'Fold: {
         {List: Nil, Acc: `a}: a
         {List: {Head: `h, Next: `n}, Acc: `a, Fn: `f}: Fold.{ List: n, Acc: f.{Acc: a, Head: h}, Fn: f }
