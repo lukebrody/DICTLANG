@@ -12,6 +12,7 @@ object Token {
     case Apostrophe.pattern(rest)   => tokenize(rest).map(Seq(Apostrophe) ++ _)
     case Name.pattern(name, rest)   => tokenize(rest).map(Seq(Name(name)) ++ _)
     case Backtick.pattern(rest)     => tokenize(rest).map(Seq(Backtick) ++ _)
+    case Dot.pattern(rest)          => tokenize(rest).map(Seq(Dot) ++ _)
     case _                          => Failure(new Exception(s"Cannot parse $string"))
   }
 }
@@ -44,6 +45,10 @@ object Name {
 
 case object Backtick extends Token {
   def pattern: Regex = "`(.*)".r
+}
+
+case object Dot extends Token {
+  def pattern: Regex = """\.(.*)""".r
 }
 
 val whitespacePattern = """^\s*(\S*)(.*)$""".r

@@ -66,7 +66,7 @@ object Bind {
     in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => Bind(name) }
 }
 
-case class Symbol(name: String) extends Pattern
+case class Symbol(name: String) extends Pattern with Expression
 
 object Symbol {
   def parse(in: Parsing[_]): Parsing[Symbol] = in.popName().map { case Name(name) => Symbol(name) }
@@ -102,11 +102,50 @@ object PatternDict {
 
 object Pattern {
   def parse(in: Parsing[_]): Parsing[Pattern] = {
-    val dict: Parsing[Pattern] = PatternDict.parse(in)
-    dict orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(in)
+    PatternDict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(in)
   }
 }
 
-sealed trait Expression
+sealed trait Expression extends AST
 
-object Expression {}
+object Expression {
+  def parse(in: Parsing[_]): Parsing[Expression] = {
+    ExpressionDict.parse(in) orElse DotExpression.parse(in) orElse Symbol.parse(in)
+  }
+}
+
+case class ExpressionDict(dict: Map[Expression, Expression]) extends Expression
+
+object ExpressionDict {
+  def parse(in: Parsing[_]): Parsing[ExpressionDict] =
+    Dict.parse(Expression.parse, Expression.parse)(in).map { result => ExpressionDict(result.toMap) }
+}
+
+// Should be left-associative
+// a.b.c
+// ((a, b), c)
+
+case class DotExpression(left: Expression, right: Expression) extends Expression {
+
+  private def exprs: Seq[Expression] = {
+    def get(e: Expression) = e match {
+      case dot: DotExpression => dot.exprs
+      case e                  => Seq(e)
+    }
+
+    get(left) ++ get(right)
+  }
+
+  def leftAssoc: DotExpression = {
+    val es = exprs
+    es.drop(2).foldLeft(DotExpression(es(0), es(1))) { case (acc, e) => DotExpression(acc, e) }
+  }
+}
+
+object DotExpression {
+  def parse(in: Parsing[_]): Parsing[DotExpression] = {
+    in.mapTwo(_.mapTwo(Expression.parse, _.pop(Dot)), Expression.parse).map { case ((left, _), right) =>
+      DotExpression(left, right).leftAssoc
+    }
+  }
+}
