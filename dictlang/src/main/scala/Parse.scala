@@ -1,31 +1,41 @@
 import com.sun.tools.javac.parser.Tokens
 
-sealed trait ParseResult[+A <: AST] {
+sealed trait ParseResult[+A] {
   self =>
 
-  def withFilter(p: Success[A] => Boolean): WithFilter = new WithFilter(p)
+  def map[B](f: A => B): ParseResult[B]
+  def flatMap[B](f: A => ParseResult[B]): ParseResult[B]
 
-  def filter(f: Success[A] => Boolean): ParseResult[A] = flatMap { success =>
-    if (f(success)) success else Failure
+  def orElse[B >: A](other: ParseResult[B]): ParseResult[B]
+
+  def pop[T <: Token](token: T): ParseResult[T]
+  def popName(): ParseResult[Name]
+
+  def mapTwo[A, B](a: ParseResult[_] => ParseResult[A], b: ParseResult[_] => ParseResult[B]): ParseResult[(A, B)] = {
+    val first = a(this)
+    val second = b(first)
+    first.flatMap { firstResult =>
+      second.map { secondResult =>
+        (firstResult, secondResult)
+      }
+    }
   }
-  def map[B](f: Success[A] => Success[B]): ParseResult[B] = flatMap(f)
-  def flatMap[B](f: Success[A] => ParseResult[B]): ParseResult[B]
-  def foreach[U](aToU: Success[A] => U): Unit
-
-  class WithFilter(p: Success[A] => Boolean) {
-    def map[B](f: Success[A] => Success[B]): ParseResult[B] = self filter p map f
-    def flatMap[B](f: Success[A] => ParseResult[B]): ParseResult[B] = self filter p flatMap f
-    def foreach[U](f: Success[A] => U): Unit = self filter p foreach f
-    def withFilter(q: Success[A] => Boolean): WithFilter = new WithFilter(x => p(x) && q(x))
-  }
-
-  def orElse(other: ParseResult[A]): ParseResult[A]
 }
 
-case class Success[+A <: AST](ast: A, rest: Seq[Token]) extends ParseResult[A] {
-  override def flatMap[B](f: Success[A] => ParseResult[B]): ParseResult[B] = f(this)
-  override def foreach[U](aToU: Success[A] => U): Unit = aToU(this)
-  override def orElse(other: ParseResult[A]): ParseResult[A] = this
+case class Success[+A](ast: A, rest: Seq[Token]) extends ParseResult[A] {
+  override def map[B](f: A => B): ParseResult[B] = Success[B](f(ast), rest)
+  override def flatMap[B](f: A => ParseResult[B]): ParseResult[B] = f(ast)
+  override def orElse[B >: A](other: ParseResult[B]): ParseResult[B] = this
+
+  override def pop[T <: Token](token: T): ParseResult[T] = rest match {
+    case Seq(`token`, rest @ _*) => Success(token, rest)
+    case _                       => Failure
+  }
+
+  override def popName(): ParseResult[Name] = rest match {
+    case Seq(Name(name), rest @ _*) => Success(Name(name), rest)
+    case _                          => Failure
+  }
 }
 
 object Success {
@@ -33,9 +43,13 @@ object Success {
 }
 
 case object Failure extends ParseResult[Nothing] {
-  override def flatMap[B](f: Success[Nothing] => ParseResult[B]): ParseResult[B] = Failure
-  override def foreach[U](aToU: Success[Nothing] => U): Unit = Failure
-  override def orElse(other: ParseResult[Nothing]): ParseResult[Nothing] = other
+  override def map[B](f: Nothing => B): ParseResult[B] = Failure
+  override def flatMap[B](f: Nothing => ParseResult[B]): ParseResult[B] = Failure
+  override def orElse[B >: Nothing](other: ParseResult[B]): ParseResult[B] = other
+
+  override def pop[T <: Token](token: T): ParseResult[T] = Failure
+  override def popName(): ParseResult[Name] = Failure
+
 }
 
 sealed trait AST
@@ -45,76 +59,56 @@ sealed trait Pattern extends AST
 case class Definition(name: String) extends Pattern
 
 object Definition {
-  def parse(tokens: Seq[Token]): ParseResult[Definition] = tokens match {
-    case Seq(Apostrophe, Name(name), rest @ _*) => Success(Definition(name), rest)
-    case _                                      => Failure
-  }
+  def parse(in: ParseResult[_]): ParseResult[Definition] =
+    in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => Definition(name) }
 }
 
 case class Bind(name: String) extends Pattern
 
 object Bind {
-  def parse(tokens: Seq[Token]): ParseResult[Bind] = tokens match {
-    case Seq(Backtick, Name(name), rest @ _*) => Success(Bind(name), rest)
-    case _                                    => Failure
-  }
+  def parse(in: ParseResult[_]): ParseResult[Bind] =
+    in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => Bind(name) }
 }
 
 case class Symbol(name: String) extends Pattern
 
 object Symbol {
-  def parse(tokens: Seq[Token]): ParseResult[Symbol] = tokens match {
-    case Seq(Name(name), rest @ _*) => Success(Symbol(name), rest)
-    case _                          => Failure
-  }
+  def parse(in: ParseResult[_]): ParseResult[Symbol] = in.popName().map { case Name(name) => Symbol(name) }
 }
 
 object Dict {
-  def parse[K, V](key: Seq[Token] => ParseResult[K], value: Seq[Token] => ParseResult[V])(
-      tokens: Seq[Token]
+  def parse[K, V](key: ParseResult[_] => ParseResult[K], value: ParseResult[_] => ParseResult[V])(
+      in: ParseResult[_]
   ): ParseResult[Seq[(K, V)]] = {
 
-    def parsePairs(tokens: Seq[Token]): ParseResult[Seq[(K, V)]] = for {
-      Success(k: K, afterKey) <- key(tokens)
-      Success(v: V, afterValue) <- afterKey match {
-        case Seq(Colon, rest @ _*) => value(rest)
-        case _                     => Failure
+    def parsePairs(in: ParseResult[_]): ParseResult[Seq[(K, V)]] = {
+      val row = in.mapTwo(_.mapTwo(key, _.pop(Colon)), _.mapTwo(value, _.pop(Comma))).map { case ((k, _), (v, _)) =>
+        Seq((k, v))
       }
-      result <- afterValue match {
-        case Seq(Comma, rest @ _*) =>
-          parsePairs(rest) match {
-            case Success(morePairs, rest) => Success[Seq[(K, V)]](Seq((k, v)) ++ morePairs, rest)
-            case Failure                  => Success[Seq[(K, V)]](Seq((k, v)), rest)
-          }
-        case _ => Failure
+      row.flatMap { r =>
+        parsePairs(row) match {
+          case Failure            => row
+          case Success(ast, rest) => Success(r ++ ast, rest)
+        }
       }
-    } yield result
+    }
 
-    for {
-      Success(pairs, rest) <- tokens match {
-        case Seq(OpenBracket, rest @ _*) => parsePairs(rest)
-        case _                           => Failure
-      }
-      result <- rest match {
-        case Seq(CloseBracket, rest @ _*) => Success(pairs, rest)
-        case _                            => Failure
-      }
-    } yield result
+    in.mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket)).map { case ((_, rows), _) => rows }
   }
 }
 
 case class PatternDict(dict: Map[Pattern, Pattern]) extends Pattern
 
 object PatternDict {
-  def parse(tokens: Seq[Token]): ParseResult[PatternDict] =
-    Dict.parse(Pattern.parse, Pattern.parse)(tokens).map { case Success(results, rest) =>
-      Success(PatternDict(results.toMap), rest)
-    }
+  def parse(in: ParseResult[_]): ParseResult[PatternDict] =
+    Dict.parse(Pattern.parse, Pattern.parse)(in).map { result => PatternDict(result.toMap) }
 }
 
 object Pattern {
-  def parse(tokens: Seq[Token]): ParseResult[Pattern] =
-    PatternDict.parse(tokens) orElse Definition.parse(tokens) orElse Bind.parse(tokens) orElse Symbol.parse(tokens)
+  def parse(in: ParseResult[_]): ParseResult[Pattern] = {
+    val dict: ParseResult[Pattern] = PatternDict.parse(in)
+    dict orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(in)
+  }
 }
 
 sealed trait Expression
