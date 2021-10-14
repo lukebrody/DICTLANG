@@ -50,80 +50,59 @@ case object Failure extends Parsing[Nothing] {
 
 sealed trait AST
 
-sealed trait Pattern extends AST
+sealed trait Expression extends AST
 
-case class Definition(name: String) extends Pattern
+object Expression {
+  def parse(in: Parsing[_]): Parsing[Expression] = {
+    Dict.parse(in) orElse DotExpression.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(
+      in
+    )
+  }
+}
+
+case class Dict(dict: Map[Expression, Expression]) extends Expression
+
+object Dict {
+  def parse(in: Parsing[_]): Parsing[Dict] = {
+
+    def parsePairs(in: Parsing[_]): Parsing[Seq[(Expression, Expression)]] = {
+      val row = in.mapTwo(_.mapTwo(Expression.parse, _.pop(Colon)), _.mapTwo(Expression.parse, _.pop(Comma))).map {
+        case ((k, _), (v, _)) =>
+          Seq((k, v))
+      }
+      row.flatMap { r =>
+        parsePairs(row) match {
+          case Failure                                         => row
+          case success: Success[Seq[(Expression, Expression)]] => Success(r ++ success.ast, success.rest)
+        }
+      }
+    }
+
+    in.mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket)).map { case ((_, rows), _) =>
+      Dict(rows.toMap)
+    }
+  }
+}
+
+case class Definition(name: String) extends Expression
 
 object Definition {
   def parse(in: Parsing[_]): Parsing[Definition] =
     in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => Definition(name) }
 }
 
-case class Bind(name: String) extends Pattern
+case class Bind(name: String) extends Expression
 
 object Bind {
   def parse(in: Parsing[_]): Parsing[Bind] =
     in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => Bind(name) }
 }
 
-case class Symbol(name: String) extends Pattern with Expression
+case class Symbol(name: String) extends Expression
 
 object Symbol {
   def parse(in: Parsing[_]): Parsing[Symbol] = in.popName().map { case Name(name) => Symbol(name) }
 }
-
-object Dict {
-  def parse[K, V](key: Parsing[_] => Parsing[K], value: Parsing[_] => Parsing[V])(
-      in: Parsing[_]
-  ): Parsing[Seq[(K, V)]] = {
-
-    def parsePairs(in: Parsing[_]): Parsing[Seq[(K, V)]] = {
-      val row = in.mapTwo(_.mapTwo(key, _.pop(Colon)), _.mapTwo(value, _.pop(Comma))).map { case ((k, _), (v, _)) =>
-        Seq((k, v))
-      }
-      row.flatMap { r =>
-        parsePairs(row) match {
-          case Failure            => row
-          case Success(ast, rest) => Success(r ++ ast, rest)
-        }
-      }
-    }
-
-    in.mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket)).map { case ((_, rows), _) => rows }
-  }
-}
-
-case class PatternDict(dict: Map[Pattern, Pattern]) extends Pattern
-
-object PatternDict {
-  def parse(in: Parsing[_]): Parsing[PatternDict] =
-    Dict.parse(Pattern.parse, Pattern.parse)(in).map { result => PatternDict(result.toMap) }
-}
-
-object Pattern {
-  def parse(in: Parsing[_]): Parsing[Pattern] = {
-    PatternDict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(in)
-  }
-}
-
-sealed trait Expression extends AST
-
-object Expression {
-  def parse(in: Parsing[_]): Parsing[Expression] = {
-    ExpressionDict.parse(in) orElse DotExpression.parse(in) orElse Symbol.parse(in)
-  }
-}
-
-case class ExpressionDict(dict: Map[Expression, Expression]) extends Expression
-
-object ExpressionDict {
-  def parse(in: Parsing[_]): Parsing[ExpressionDict] =
-    Dict.parse(Expression.parse, Expression.parse)(in).map { result => ExpressionDict(result.toMap) }
-}
-
-// Should be left-associative
-// a.b.c
-// ((a, b), c)
 
 case class DotExpression(left: Expression, right: Expression) extends Expression {
 
