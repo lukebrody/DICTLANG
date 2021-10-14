@@ -1,5 +1,3 @@
-import com.sun.tools.javac.parser.Tokens
-
 sealed trait ParseResult[+A] {
   self =>
 
