@@ -7,15 +7,7 @@ sealed trait Parsing[+A] {
   def pop[T <: Token](token: T): Parsing[T]
   def popName(): Parsing[Name]
 
-  def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[_] => Parsing[B]): Parsing[(A, B)] = {
-    val first = a(this)
-    val second = b(first)
-    first.flatMap { firstResult =>
-      second.map { secondResult =>
-        (firstResult, secondResult)
-      }
-    }
-  }
+  def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[_] => Parsing[B]): Parsing[(A, B)]
 }
 
 case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
@@ -32,6 +24,15 @@ case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
     case Seq(Name(name), rest @ _*) => Success(Name(name), rest)
     case _                          => Failure
   }
+
+  override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[_] => Parsing[B]): Parsing[(A, B)] = {
+    val first = a(this)
+    first.flatMap { firstResult =>
+      b(first).map { secondResult =>
+        (firstResult, secondResult)
+      }
+    }
+  }
 }
 
 object Success {
@@ -46,6 +47,8 @@ case object Failure extends Parsing[Nothing] {
   override def pop[T <: Token](token: T): Parsing[T] = Failure
   override def popName(): Parsing[Name] = Failure
 
+  override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[_] => Parsing[B]): Parsing[(A, B)] = Failure
+
 }
 
 sealed trait AST
@@ -54,7 +57,11 @@ sealed trait Expression extends AST
 
 object Expression {
   def parse(in: Parsing[_]): Parsing[Expression] = {
-    Dict.parse(in) orElse DotExpression.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(
+    DotExpression.parse(in) orElse parseNoDot(in)
+  }
+
+  def parseNoDot(in: Parsing[_]): Parsing[Expression] = {
+    Dict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(
       in
     )
   }
@@ -78,9 +85,11 @@ object Dict {
       }
     }
 
-    in.mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket)).map { case ((_, rows), _) =>
-      Dict(rows.toMap)
-    }
+    in.mapTwo(_.pop(OpenBracket), _.pop(CloseBracket)).map { _ => Dict(Map.empty) } orElse in
+      .mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket))
+      .map { case ((_, rows), _) =>
+        Dict(rows.toMap)
+      }
   }
 }
 
@@ -123,7 +132,7 @@ case class DotExpression(left: Expression, right: Expression) extends Expression
 
 object DotExpression {
   def parse(in: Parsing[_]): Parsing[DotExpression] = {
-    in.mapTwo(_.mapTwo(Expression.parse, _.pop(Dot)), Expression.parse).map { case ((left, _), right) =>
+    in.mapTwo(_.mapTwo(Expression.parseNoDot, _.pop(Dot)), Expression.parse).map { case ((left, _), right) =>
       DotExpression(left, right).leftAssoc
     }
   }
