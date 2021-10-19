@@ -35,10 +35,6 @@ case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
   }
 }
 
-object Success {
-  def unapply[A <: AST](arg: Success[A]): Option[(A, Seq[Token])] = Some((arg.ast, arg.rest))
-}
-
 case object Failure extends Parsing[Nothing] {
   override def map[B](f: Nothing => B): Parsing[B] = Failure
   override def flatMap[B](f: Nothing => Parsing[B]): Parsing[B] = Failure
@@ -51,70 +47,12 @@ case object Failure extends Parsing[Nothing] {
 
 }
 
-sealed trait AST
-
-sealed trait Expression extends AST
-
-object Expression {
-  def parse(in: Parsing[_]): Parsing[Expression] = {
-    DotExpression.parse(in) orElse parseNoDot(in)
-  }
-
-  def parseNoDot(in: Parsing[_]): Parsing[Expression] = {
-    Dict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(
-      in
-    )
-  }
-}
-
-case class Dict(dict: Map[Expression, Expression]) extends Expression
-
-object Dict {
-  def parse(in: Parsing[_]): Parsing[Dict] = {
-
-    def parsePairs(in: Parsing[_]): Parsing[Seq[(Expression, Expression)]] = {
-      val row = in.mapTwo(_.mapTwo(Expression.parse, _.pop(Colon)), _.mapTwo(Expression.parse, _.pop(Comma))).map {
-        case ((k, _), (v, _)) =>
-          Seq((k, v))
-      }
-      row.flatMap { r =>
-        parsePairs(row) match {
-          case Failure                                         => row
-          case success: Success[Seq[(Expression, Expression)]] => Success(r ++ success.ast, success.rest)
-        }
-      }
-    }
-
-    in.mapTwo(_.pop(OpenBracket), _.pop(CloseBracket)).map { _ => Dict(Map.empty) } orElse in
-      .mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket))
-      .map { case ((_, rows), _) =>
-        Dict(rows.toMap)
-      }
-  }
-}
-
+sealed trait Expression
+case class Dict(dict: Seq[Dict.Entry]) extends Expression
 case class Definition(name: String) extends Expression
-
-object Definition {
-  def parse(in: Parsing[_]): Parsing[Definition] =
-    in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => Definition(name) }
-}
-
 case class Bind(name: String) extends Expression
-
-object Bind {
-  def parse(in: Parsing[_]): Parsing[Bind] =
-    in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => Bind(name) }
-}
-
 case class Symbol(name: String) extends Expression
-
-object Symbol {
-  def parse(in: Parsing[_]): Parsing[Symbol] = in.popName().map { case Name(name) => Symbol(name) }
-}
-
 case class DotExpression(left: Expression, right: Expression) extends Expression {
-
   private def exprs: Seq[Expression] = {
     def get(e: Expression) = e match {
       case dot: DotExpression => dot.exprs
@@ -128,6 +66,58 @@ case class DotExpression(left: Expression, right: Expression) extends Expression
     val es = exprs
     es.drop(2).foldLeft(DotExpression(es(0), es(1))) { case (acc, e) => DotExpression(acc, e) }
   }
+}
+
+object Expression {
+  def parse(in: Parsing[_]): Parsing[Expression] = {
+    DotExpression.parse(in) orElse parseNoDot(in)
+  }
+
+  def parseNoDot(in: Parsing[_]): Parsing[Expression] = {
+    Dict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(
+      in
+    )
+  }
+}
+
+object Dict {
+  case class Entry(key: Expression, value: Expression)
+
+  def parse(in: Parsing[_]): Parsing[Dict] = {
+
+    def parsePairs(in: Parsing[_]): Parsing[Seq[Entry]] = {
+      val row = in.mapTwo(_.mapTwo(Expression.parse, _.pop(Colon)), _.mapTwo(Expression.parse, _.pop(Comma))).map {
+        case ((k, _), (v, _)) =>
+          Seq(Entry(k, v))
+      }
+      row.flatMap { r =>
+        parsePairs(row) match {
+          case Failure                      => row
+          case success: Success[Seq[Entry]] => Success(r ++ success.ast, success.rest)
+        }
+      }
+    }
+
+    in.mapTwo(_.pop(OpenBracket), _.pop(CloseBracket)).map { _ => Dict(Seq.empty) } orElse in
+      .mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket))
+      .map { case ((_, rows), _) =>
+        Dict(rows)
+      }
+  }
+}
+
+object Definition {
+  def parse(in: Parsing[_]): Parsing[Definition] =
+    in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => Definition(name) }
+}
+
+object Bind {
+  def parse(in: Parsing[_]): Parsing[Bind] =
+    in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => Bind(name) }
+}
+
+object Symbol {
+  def parse(in: Parsing[_]): Parsing[Symbol] = in.popName().map { case Name(name) => Symbol(name) }
 }
 
 object DotExpression {
