@@ -51,10 +51,13 @@ case object Failure extends Parsing[Nothing] {
 
 }
 
-sealed trait Expression
+sealed trait AST
+sealed trait Expression extends AST
+sealed trait Declaration extends AST
+
 case class Dict(dict: Seq[Dict.Entry]) extends Expression
-case class Definition(name: String) extends Expression
-case class Bind(name: String) extends Expression
+case class Definition(name: String) extends Declaration
+case class Bind(name: String) extends Declaration
 case class Symbol(name: String) extends Expression
 case class DotExpression(left: Expression, right: Expression) extends Expression {
   private def exprs: Seq[Expression] = {
@@ -78,19 +81,23 @@ object Expression {
   }
 
   def parseNoDot(in: Parsing[_]): Parsing[Expression] = {
-    Dict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in) orElse Symbol.parse(
-      in
-    )
+    Dict.parse(in) orElse Symbol.parse(in)
+  }
+}
+
+object AST {
+  def parse(in: Parsing[_]): Parsing[AST] = {
+    Expression.parse(in) orElse Definition.parse(in) orElse Bind.parse(in)
   }
 }
 
 object Dict {
-  case class Entry(key: Expression, value: Expression)
+  case class Entry(key: AST, value: Expression)
 
   def parse(in: Parsing[_]): Parsing[Dict] = {
 
     def parsePairs(in: Parsing[_]): Parsing[Seq[Entry]] = {
-      val row = in.mapTwo(_.mapTwo(Expression.parse, _.pop(Colon)), _.mapTwo(Expression.parse, _.pop(Comma))).map {
+      val row = in.mapTwo(_.mapTwo(AST.parse, _.pop(Colon)), _.mapTwo(Expression.parse, _.pop(Comma))).map {
         case ((k, _), (v, _)) =>
           Seq(Entry(k, v))
       }
