@@ -1,3 +1,7 @@
+package parse
+
+import tokenize._
+
 sealed trait Parsing[+A] {
   def map[B](f: A => B): Parsing[B]
   def flatMap[B](f: A => Parsing[B]): Parsing[B]

@@ -1,3 +1,5 @@
+package tokenize
+
 import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
 
