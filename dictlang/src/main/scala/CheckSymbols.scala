@@ -40,14 +40,14 @@ import scala.util.{Failure, Success, Try}
 //  }
 //}
 
-def resolve(value: parse.Value, symbols: Set[String]): Try[Unit] = value match {
-  case parse.Symbol(name) =>
-    symbols.contains(name) match {
-      case true  => Success(())
-      case false => Failure(new Exception(s"$name not found"))
-    }
-  case parse.DotExpression(left, right) => for {
-    _ <- resolve(left)
-    _ <- resolve(right)
-  }
-}
+//def resolve(value: parse.Value, symbols: Set[String]): Try[Unit] = value match {
+//  case parse.Symbol(name) =>
+//    symbols.contains(name) match {
+//      case true  => Success(())
+//      case false => Failure(new Exception(s"$name not found"))
+//    }
+//  case parse.DotExpression(left, right) => for {
+//    _ <- resolve(left)
+//    _ <- resolve(right)
+//  }
+//}

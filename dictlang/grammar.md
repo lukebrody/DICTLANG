@@ -1,6 +1,6 @@
 ```
-dict = { match : dict } | useSymbol
-match = declareSymbol | bindSymbol | useSymbol | { match : match }
+value = { match : value } | useSymbol
+match = declareSymbol | bindSymbol | value | { match : match }
 dotExpr = dict . dict
 ```
 

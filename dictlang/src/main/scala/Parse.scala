@@ -70,16 +70,18 @@ match
 
  */
 
-sealed trait Key
-sealed trait Match extends Key
+sealed trait Match
+
+case class MatchDict(entries: Seq[Dict.Entry[Match, Match]]) extends Match
+
+case class UseSymbol(name: String) extends Value
+case class DeclareSymbol(name: String) extends Match
+case class BindSymbol(name: String) extends Match
+
 sealed trait Value extends Match
 
-case class Definition(name: String) extends Key
-case class MatchDict(entries: Seq[Dict.Entry[Value, Match]]) extends Match
-case class Bind(name: String) extends Match
+case class ValueDict(entries: Seq[Dict.Entry[Match, Value]]) extends Value
 
-case class ValueDict(entries: Seq[Dict.Entry[Key, Value]]) extends Value
-case class Symbol(name: String) extends Value
 case class DotExpression(left: Value, right: Value) extends Value {
   private def exprs: Seq[Value] = {
     def get(e: Value) = e match {
@@ -102,31 +104,25 @@ object Value {
   }
 
   def parseNoDot(in: Parsing[_]): Parsing[Value] = {
-    ValueDict.parse(in) orElse Symbol.parse(in)
+    ValueDict.parse(in) orElse UseSymbol.parse(in)
   }
 }
 
 object ValueDict {
   def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict.parse[Key, Value](in, Key.parse, Value.parse).map(ValueDict(_))
-  }
-}
-
-object Key {
-  def parse(in: Parsing[_]): Parsing[Key] = {
-    MatchDict.parse(in) orElse Definition.parse(in) orElse Bind.parse(in)
-  }
-}
-
-object MatchDict {
-  def parse(in: Parsing[_]): Parsing[MatchDict] = {
-    Dict.parse[Value, Match](in, Value.parse, Match.parse).map(MatchDict(_))
+    Dict.parse[Match, Value](in, Match.parse, Value.parse).map(ValueDict(_))
   }
 }
 
 object Match {
   def parse(in: Parsing[_]): Parsing[Match] = {
-    DotExpression.parse(in) orElse MatchDict.parse(in) orElse Bind.parse(in) orElse Symbol.parse(in)
+    MatchDict.parse(in) orElse DeclareSymbol.parse(in) orElse BindSymbol.parse(in) orElse Value.parse(in)
+  }
+}
+
+object MatchDict {
+  def parse(in: Parsing[_]): Parsing[MatchDict] = {
+    Dict.parse[Match, Match](in, Match.parse, Match.parse).map(MatchDict(_))
   }
 }
 
@@ -162,18 +158,18 @@ object Dict {
   }
 }
 
-object Definition {
-  def parse(in: Parsing[_]): Parsing[Definition] =
-    in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => Definition(name) }
+object DeclareSymbol {
+  def parse(in: Parsing[_]): Parsing[DeclareSymbol] =
+    in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => DeclareSymbol(name) }
 }
 
-object Bind {
-  def parse(in: Parsing[_]): Parsing[Bind] =
-    in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => Bind(name) }
+object BindSymbol {
+  def parse(in: Parsing[_]): Parsing[BindSymbol] =
+    in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => BindSymbol(name) }
 }
 
-object Symbol {
-  def parse(in: Parsing[_]): Parsing[Symbol] = in.popName().map { case Name(name) => Symbol(name) }
+object UseSymbol {
+  def parse(in: Parsing[_]): Parsing[UseSymbol] = in.popName().map { case Name(name) => UseSymbol(name) }
 }
 
 object DotExpression {
