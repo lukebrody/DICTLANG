@@ -98,25 +98,29 @@ case class DotExpression(left: Value, right: Value) extends Value {
   }
 }
 
-object Value {
-  def parse(in: Parsing[_]): Parsing[Value] = {
-    DotExpression.parse(in) orElse parseNoDot(in)
-  }
+case class SubscriptExpression(left: Value, right: Value) extends Value
 
-  def parseNoDot(in: Parsing[_]): Parsing[Value] = {
-    ValueDict.parse(in) orElse UseSymbol.parse(in)
+object Value {
+  def parse(dot: Boolean = false, subscript: Boolean = true)(in: Parsing[_]): Parsing[Value] = {
+    {
+      if (dot) DotExpression.parse(in) else Failure
+    } orElse {
+      if (subscript) SubscriptExpression.parse(in) else Failure
+    } orElse {
+      ValueDict.parse(in) orElse UseSymbol.parse(in)
+    }
   }
 }
 
 object ValueDict {
   def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict.parse[Match, Value](in, Match.parse, Value.parse).map(ValueDict(_))
+    Dict.parse[Match, Value](in, Match.parse, Value.parse()).map(ValueDict(_))
   }
 }
 
 object Match {
   def parse(in: Parsing[_]): Parsing[Match] = {
-    MatchDict.parse(in) orElse DeclareSymbol.parse(in) orElse BindSymbol.parse(in) orElse Value.parse(in)
+    MatchDict.parse(in) orElse DeclareSymbol.parse(in) orElse BindSymbol.parse(in) orElse Value.parse()(in)
   }
 }
 
@@ -174,8 +178,20 @@ object UseSymbol {
 
 object DotExpression {
   def parse(in: Parsing[_]): Parsing[DotExpression] = {
-    in.mapTwo(_.mapTwo(Value.parseNoDot, _.pop(Dot)), Value.parse).map { case ((left, _), right) =>
+    in.mapTwo(
+      _.mapTwo(Value.parse(dot = false), _.pop(Dot)),
+      Value.parse()
+    ).map { case ((left, _), right) =>
       DotExpression(left, right).leftAssoc
     }
+  }
+}
+
+object SubscriptExpression {
+  def parse(in: Parsing[_]): Parsing[SubscriptExpression] = {
+    in.mapTwo(
+      _.mapTwo(Value.parse(subscript = false), _.pop(OpenSquareBracket)),
+      _.mapTwo(Value.parse(), _.pop(CloseSquareBracket))
+    ).map { case ((left, _), (right, _)) => SubscriptExpression(left, right) }
   }
 }

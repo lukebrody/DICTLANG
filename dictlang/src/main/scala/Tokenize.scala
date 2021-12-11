@@ -7,15 +7,17 @@ sealed trait Token
 
 object Token {
   def apply(string: String): Try[Seq[Token]] = string match {
-    case OpenBracket.pattern(rest)  => tokenize(rest).map(Seq(OpenBracket) ++ _)
-    case CloseBracket.pattern(rest) => tokenize(rest).map(Seq(CloseBracket) ++ _)
-    case Colon.pattern(rest)        => tokenize(rest).map(Seq(Colon) ++ _)
-    case Comma.pattern(rest)        => tokenize(rest).map(Seq(Comma) ++ _)
-    case Apostrophe.pattern(rest)   => tokenize(rest).map(Seq(Apostrophe) ++ _)
-    case Name.pattern(name, rest)   => tokenize(rest).map(Seq(Name(name)) ++ _)
-    case Backtick.pattern(rest)     => tokenize(rest).map(Seq(Backtick) ++ _)
-    case Dot.pattern(rest)          => tokenize(rest).map(Seq(Dot) ++ _)
-    case _                          => Failure(new Exception(s"Cannot parse $string"))
+    case OpenBracket.pattern(rest)        => tokenize(rest).map(Seq(OpenBracket) ++ _)
+    case CloseBracket.pattern(rest)       => tokenize(rest).map(Seq(CloseBracket) ++ _)
+    case Colon.pattern(rest)              => tokenize(rest).map(Seq(Colon) ++ _)
+    case Comma.pattern(rest)              => tokenize(rest).map(Seq(Comma) ++ _)
+    case Apostrophe.pattern(rest)         => tokenize(rest).map(Seq(Apostrophe) ++ _)
+    case Name.pattern(name, rest)         => tokenize(rest).map(Seq(Name(name)) ++ _)
+    case Backtick.pattern(rest)           => tokenize(rest).map(Seq(Backtick) ++ _)
+    case Dot.pattern(rest)                => tokenize(rest).map(Seq(Dot) ++ _)
+    case OpenSquareBracket.pattern(rest)  => tokenize(rest).map(Seq(OpenSquareBracket) ++ _)
+    case CloseSquareBracket.pattern(rest) => tokenize(rest).map(Seq(CloseSquareBracket) ++ _)
+    case _                                => Failure(new Exception(s"Cannot parse $string"))
   }
 }
 
@@ -51,6 +53,14 @@ case object Backtick extends Token {
 
 case object Dot extends Token {
   def pattern: Regex = """\.(.*)""".r
+}
+
+case object OpenSquareBracket extends Token {
+  def pattern: Regex = """\[(.*)""".r
+}
+
+case object CloseSquareBracket extends Token {
+  def pattern: Regex = """\](.*)""".r
 }
 
 val whitespacePattern = """^\s*(\S*)(.*)$""".r
