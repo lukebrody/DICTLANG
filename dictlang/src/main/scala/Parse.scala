@@ -87,7 +87,6 @@ sealed trait Match
 case class MatchDict(entries: Seq[Dict.Entry[Match, Match]]) extends Match
 
 case class UseSymbol(name: String) extends Value
-case class DeclareSymbol(name: String) extends Match
 case class BindSymbol(name: String) extends Match
 
 sealed trait Value extends Match
@@ -101,9 +100,9 @@ case class SubscriptExpression(left: Value, rights: Seq[Value]) extends Value
 object Value {
   def parse(in: Parsing[_]): Parsing[Value] = {
     {
-      if (in.canBe(DotExpression)) DotExpression.parse(in) else Failure
-    } orElse {
       if (in.canBe(SubscriptExpression)) SubscriptExpression.parse(in) else Failure
+    } orElse {
+      if (in.canBe(DotExpression)) DotExpression.parse(in) else Failure
     } orElse {
       ValueDict.parse(in) orElse UseSymbol.parse(in)
     }
@@ -118,7 +117,7 @@ object ValueDict {
 
 object Match {
   def parse(in: Parsing[_]): Parsing[Match] = {
-    MatchDict.parse(in) orElse DeclareSymbol.parse(in) orElse BindSymbol.parse(in) orElse Value.parse(in)
+    MatchDict.parse(in) orElse BindSymbol.parse(in) orElse Value.parse(in)
   }
 }
 
@@ -160,14 +159,11 @@ object Dict {
   }
 }
 
-object DeclareSymbol {
-  def parse(in: Parsing[_]): Parsing[DeclareSymbol] =
-    in.mapTwo(_.pop(Apostrophe), _.popName()).map { case (_, Name(name)) => DeclareSymbol(name) }
-}
-
 object BindSymbol {
   def parse(in: Parsing[_]): Parsing[BindSymbol] =
-    in.mapTwo(_.pop(Backtick), _.popName()).map { case (_, Name(name)) => BindSymbol(name) }
+    in.mapTwo(_.mapTwo(_.pop(Backtick), _.popName()), _.pop(Backtick)).map { case ((_, Name(name)), _) =>
+      BindSymbol(name)
+    }
 }
 
 object UseSymbol {

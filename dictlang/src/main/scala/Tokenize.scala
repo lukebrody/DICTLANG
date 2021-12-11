@@ -11,7 +11,6 @@ object Token {
     case CloseBracket.pattern(rest)       => tokenize(rest).map(Seq(CloseBracket) ++ _)
     case Colon.pattern(rest)              => tokenize(rest).map(Seq(Colon) ++ _)
     case Comma.pattern(rest)              => tokenize(rest).map(Seq(Comma) ++ _)
-    case Apostrophe.pattern(rest)         => tokenize(rest).map(Seq(Apostrophe) ++ _)
     case Name.pattern(name, rest)         => tokenize(rest).map(Seq(Name(name)) ++ _)
     case Backtick.pattern(rest)           => tokenize(rest).map(Seq(Backtick) ++ _)
     case Dot.pattern(rest)                => tokenize(rest).map(Seq(Dot) ++ _)
@@ -35,10 +34,6 @@ case object Colon extends Token {
 
 case object Comma extends Token {
   def pattern: Regex = """,(.*)""".r
-}
-
-case object Apostrophe extends Token {
-  def pattern: Regex = """'(.*)""".r
 }
 
 case class Name(name: String) extends Token
