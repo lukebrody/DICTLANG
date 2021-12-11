@@ -82,26 +82,12 @@ sealed trait Value extends Match
 
 case class ValueDict(entries: Seq[Dict.Entry[Match, Value]]) extends Value
 
-case class DotExpression(left: Value, right: Value) extends Value {
-  private def exprs: Seq[Value] = {
-    def get(e: Value) = e match {
-      case dot: DotExpression => dot.exprs
-      case e                  => Seq(e)
-    }
+case class DotExpression(left: Value, rights: Seq[Value]) extends Value
 
-    get(left) ++ get(right)
-  }
-
-  def leftAssoc: DotExpression = {
-    val es = exprs
-    es.drop(2).foldLeft(DotExpression(es(0), es(1))) { case (acc, e) => DotExpression(acc, e) }
-  }
-}
-
-case class SubscriptExpression(left: Value, right: Value) extends Value
+case class SubscriptExpression(left: Value, rights: Seq[Value]) extends Value
 
 object Value {
-  def parse(dot: Boolean = false, subscript: Boolean = true)(in: Parsing[_]): Parsing[Value] = {
+  def parse(dot: Boolean = true, subscript: Boolean = false)(in: Parsing[_]): Parsing[Value] = {
     {
       if (dot) DotExpression.parse(in) else Failure
     } orElse {
@@ -178,20 +164,26 @@ object UseSymbol {
 
 object DotExpression {
   def parse(in: Parsing[_]): Parsing[DotExpression] = {
+
+    def parseNext(in: Parsing[_]): Parsing[Seq[Value]] = {
+      in.mapTwo(_.mapTwo(_.pop(Dot), Value.parse(dot = false)), parseNext).map { case ((_, value), next) =>
+        Seq(value) ++ next
+      } orElse in.map(_ => Seq())
+    }
+
     in.mapTwo(
       _.mapTwo(Value.parse(dot = false), _.pop(Dot)),
-      Value.parse()
-    ).map { case ((left, _), right) =>
-      DotExpression(left, right).leftAssoc
-    }
+      _.mapTwo(Value.parse(dot = false), parseNext)
+    ).map { case ((left, _), (right, next)) => DotExpression(left, Seq(right) ++ next) }
   }
 }
 
 object SubscriptExpression {
   def parse(in: Parsing[_]): Parsing[SubscriptExpression] = {
-    in.mapTwo(
-      _.mapTwo(Value.parse(subscript = false), _.pop(OpenSquareBracket)),
-      _.mapTwo(Value.parse(), _.pop(CloseSquareBracket))
-    ).map { case ((left, _), (right, _)) => SubscriptExpression(left, right) }
+//    in.mapTwo(
+//      _.mapTwo(Value.parse(subscript = false), _.pop(OpenSquareBracket)),
+//      _.mapTwo(Value.parse(), _.pop(CloseSquareBracket))
+//    ).map { case ((left, _), (right, _)) => SubscriptExpression(left, right) }
+    ???
   }
 }
