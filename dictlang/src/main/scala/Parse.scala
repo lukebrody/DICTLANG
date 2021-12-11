@@ -12,20 +12,27 @@ sealed trait Parsing[+A] {
   def popName(): Parsing[Name]
 
   def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[_] => Parsing[B]): Parsing[(A, B)]
+
+  def isNot(matchType: Parsing.MatchType): Parsing[A]
+  def canBe(matchType: Parsing.MatchType): Boolean
 }
 
-case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
-  override def map[B](f: A => B): Parsing[B] = Success[B](f(ast), rest)
+object Parsing {
+  sealed trait MatchType
+}
+
+case class Success[+A](ast: A, rest: Seq[Token], prohibited: Set[Parsing.MatchType]) extends Parsing[A] {
+  override def map[B](f: A => B): Parsing[B] = Success[B](f(ast), rest, prohibited)
   override def flatMap[B](f: A => Parsing[B]): Parsing[B] = f(ast)
   override def orElse[B >: A](other: Parsing[B]): Parsing[B] = this
 
   override def pop[T <: Token](token: T): Parsing[T] = rest match {
-    case Seq(`token`, rest @ _*) => Success(token, rest)
+    case Seq(`token`, rest @ _*) => Success(token, rest, Set.empty)
     case _                       => Failure
   }
 
   override def popName(): Parsing[Name] = rest match {
-    case Seq(Name(name), rest @ _*) => Success(Name(name), rest)
+    case Seq(Name(name), rest @ _*) => Success(Name(name), rest, Set.empty)
     case _                          => Failure
   }
 
@@ -37,6 +44,9 @@ case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
       }
     }
   }
+
+  override def isNot(matchType: Parsing.MatchType): Parsing[A] = copy(prohibited = prohibited + matchType)
+  override def canBe(matchType: Parsing.MatchType): Boolean = !prohibited.contains(matchType)
 }
 
 case object Failure extends Parsing[Nothing] {
@@ -49,6 +59,8 @@ case object Failure extends Parsing[Nothing] {
 
   override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[_] => Parsing[B]): Parsing[(A, B)] = Failure
 
+  override def isNot(matchType: Parsing.MatchType): Parsing[Nothing] = Failure
+  override def canBe(matchType: Parsing.MatchType): Boolean = false
 }
 
 /*
@@ -87,11 +99,11 @@ case class DotExpression(left: Value, rights: Seq[Value]) extends Value
 case class SubscriptExpression(left: Value, rights: Seq[Value]) extends Value
 
 object Value {
-  def parse(dot: Boolean = true, subscript: Boolean = false)(in: Parsing[_]): Parsing[Value] = {
+  def parse(in: Parsing[_]): Parsing[Value] = {
     {
-      if (dot) DotExpression.parse(in) else Failure
+      if (in.canBe(DotExpression)) DotExpression.parse(in) else Failure
     } orElse {
-      if (subscript) SubscriptExpression.parse(in) else Failure
+      if (in.canBe(SubscriptExpression)) SubscriptExpression.parse(in) else Failure
     } orElse {
       ValueDict.parse(in) orElse UseSymbol.parse(in)
     }
@@ -100,13 +112,13 @@ object Value {
 
 object ValueDict {
   def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict.parse[Match, Value](in, Match.parse, Value.parse()).map(ValueDict(_))
+    Dict.parse[Match, Value](in, Match.parse, Value.parse).map(ValueDict(_))
   }
 }
 
 object Match {
   def parse(in: Parsing[_]): Parsing[Match] = {
-    MatchDict.parse(in) orElse DeclareSymbol.parse(in) orElse BindSymbol.parse(in) orElse Value.parse()(in)
+    MatchDict.parse(in) orElse DeclareSymbol.parse(in) orElse BindSymbol.parse(in) orElse Value.parse(in)
   }
 }
 
@@ -135,7 +147,7 @@ object Dict {
       row.flatMap { r =>
         parsePairs(row) match {
           case Failure                            => row
-          case success: Success[Seq[Entry[L, R]]] => Success(r ++ success.ast, success.rest)
+          case success: Success[Seq[Entry[L, R]]] => Success(r ++ success.ast, success.rest, success.prohibited)
         }
       }
     }
@@ -162,28 +174,37 @@ object UseSymbol {
   def parse(in: Parsing[_]): Parsing[UseSymbol] = in.popName().map { case Name(name) => UseSymbol(name) }
 }
 
-object DotExpression {
+object DotExpression extends Parsing.MatchType {
   def parse(in: Parsing[_]): Parsing[DotExpression] = {
 
     def parseNext(in: Parsing[_]): Parsing[Seq[Value]] = {
-      in.mapTwo(_.mapTwo(_.pop(Dot), Value.parse(dot = false)), parseNext).map { case ((_, value), next) =>
-        Seq(value) ++ next
+      in.mapTwo(_.mapTwo(_.pop(Dot), a => Value.parse(a.isNot(DotExpression))), parseNext).map {
+        case ((_, value), next) =>
+          Seq(value) ++ next
       } orElse in.map(_ => Seq())
     }
 
     in.mapTwo(
-      _.mapTwo(Value.parse(dot = false), _.pop(Dot)),
-      _.mapTwo(Value.parse(dot = false), parseNext)
+      _.mapTwo(a => Value.parse(a.isNot(DotExpression)), _.pop(Dot)),
+      _.mapTwo(b => Value.parse(b.isNot(DotExpression)), parseNext)
     ).map { case ((left, _), (right, next)) => DotExpression(left, Seq(right) ++ next) }
   }
 }
 
-object SubscriptExpression {
+object SubscriptExpression extends Parsing.MatchType {
   def parse(in: Parsing[_]): Parsing[SubscriptExpression] = {
-//    in.mapTwo(
-//      _.mapTwo(Value.parse(subscript = false), _.pop(OpenSquareBracket)),
-//      _.mapTwo(Value.parse(), _.pop(CloseSquareBracket))
-//    ).map { case ((left, _), (right, _)) => SubscriptExpression(left, right) }
-    ???
+    def parseNext(in: Parsing[_]): Parsing[Seq[Value]] = {
+      in.mapTwo(_.mapTwo(_.pop(OpenSquareBracket), Value.parse), _.mapTwo(_.pop(CloseSquareBracket), parseNext)).map {
+        case ((_, value), (_, next)) => Seq(value) ++ next
+      } orElse in.map(_ => Seq())
+    }
+
+    in.mapTwo(
+      _.mapTwo(
+        _.mapTwo(a => Value.parse(a.isNot(SubscriptExpression)), _.pop(OpenSquareBracket)),
+        _.mapTwo(Value.parse, _.pop(CloseSquareBracket))
+      ),
+      parseNext
+    ).map { case (((left, _), (right, _)), next) => SubscriptExpression(left, Seq(right) ++ next) }
   }
 }
