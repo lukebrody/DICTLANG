@@ -64,25 +64,20 @@ object Dict {
       closeBracket: Token
   ): Parsing[Seq[Entry[L, R]]] = {
 
-    def parsePairs(
+    def parseRows(
         in: Parsing[_]
     ): Parsing[Seq[Entry[L, R]]] = {
-      val row =
-        in.mapTwo(_.mapTwo(parseLeft, _.pop(Colon)), _.mapTwo(parseRight, _.pop(Comma))).map { case ((l, _), (r, _)) =>
-          Seq(Entry(l, r))
-        }
-      row.flatMap { r =>
-        parsePairs(row) match {
-          case _: Failure                         => row
-          case success: Success[Seq[Entry[L, R]]] => Success(r ++ success.ast, success.rest)
-        }
+      val row = in.mapTwo(_.mapTwo(parseLeft, _.pop(Colon)), parseRight).map { case ((l, _), r) =>
+        Seq(Entry(l, r))
       }
+
+      val nextRow = row.flatMap { rowValue =>
+        row.mapTwo(_.pop(Comma), parseRows).map { case (_, rows) => rowValue ++ rows }
+      }
+
+      nextRow orElse row orElse in.map { _ => Seq.empty }
     }
 
-    in.mapTwo(_.pop(openBracket), _.pop(closeBracket)).map { _ => Seq.empty } orElse in
-      .mapTwo(_.mapTwo(_.pop(openBracket), parsePairs), _.pop(closeBracket))
-      .map { case ((_, rows), _) =>
-        rows
-      }
+    in.mapTwo(_.mapTwo(_.pop(openBracket), parseRows), _.pop(closeBracket)).map { case ((_, value), _) => value }
   }
 }
