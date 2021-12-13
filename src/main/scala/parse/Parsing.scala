@@ -1,6 +1,6 @@
 package parse
 
-import tokenize._
+import tokenize.*
 
 sealed trait Parsing[+A] {
   def map[B](f: A => B): Parsing[B]
@@ -53,73 +53,6 @@ case class Failure(error: String, rest: Seq[Token]) extends Parsing[Nothing] {
   override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[A] => Parsing[B]): Parsing[(A, B)] = this
 }
 
-sealed trait Match
-
-case class MatchDict(entries: Seq[Dict.Entry[Match, Match]]) extends Match
-
-case class UseSymbol(name: String) extends Value
-case class BindSymbol(name: String) extends Match
-
-sealed trait Value extends Match
-
-case class ValueDict(entries: Seq[Dict.Entry[Match, Value]]) extends Value
-
-case class DotExpression(left: Value, right: Value) extends Value
-
-case class SubscriptExpression(left: Value, right: Value) extends Value
-
-object Value {
-
-  private def term(in: Parsing[_]): Parsing[Value] = UseSymbol.parse(in) orElse ValueDict.parse(in)
-
-  private def dotAfter(left: Parsing[Value]): Parsing[Value] = {
-    left.flatMap { l =>
-      left
-        .mapTwo(
-          _.mapTwo(_.pop(Dot), term).map { case (_, right) => DotExpression(l, right) },
-          dotExpr => dotAfter(dotExpr) orElse subscriptAfter(dotExpr) orElse dotExpr
-        )
-        .map(_._2)
-    }
-  }
-
-  private def subscriptAfter(left: Parsing[Value]): Parsing[Value] = {
-    left.flatMap { l =>
-      left
-        .mapTwo(
-          _.mapTwo(_.mapTwo(_.pop(OpenSquareBracket), parse), _.pop(CloseSquareBracket)).map { case ((_, right), _) =>
-            SubscriptExpression(l, right)
-          },
-          subscriptExpr => dotAfter(subscriptExpr) orElse subscriptAfter(subscriptExpr) orElse subscriptExpr
-        )
-        .map(_._2)
-    }
-  }
-
-  def parse(in: Parsing[_]): Parsing[Value] = {
-    dotAfter(term(in)) orElse subscriptAfter(term(in)) orElse term(in)
-  }
-
-}
-
-object ValueDict {
-  def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict.parse[Match, Value](in, Match.parse, Value.parse).map(ValueDict(_))
-  }
-}
-
-object Match {
-  def parse(in: Parsing[_]): Parsing[Match] = {
-    MatchDict.parse(in) orElse BindSymbol.parse(in) orElse Value.parse(in)
-  }
-}
-
-object MatchDict {
-  def parse(in: Parsing[_]): Parsing[MatchDict] = {
-    Dict.parse[Match, Match](in, Match.parse, Match.parse).map(MatchDict(_))
-  }
-}
-
 object Dict {
   case class Entry[L, R](left: L, right: R)
 
@@ -150,15 +83,4 @@ object Dict {
         rows
       }
   }
-}
-
-object BindSymbol {
-  def parse(in: Parsing[_]): Parsing[BindSymbol] =
-    in.mapTwo(_.mapTwo(_.pop(Backtick), _.popName()), _.pop(Backtick)).map { case ((_, Name(name)), _) =>
-      BindSymbol(name)
-    }
-}
-
-object UseSymbol {
-  def parse(in: Parsing[_]): Parsing[UseSymbol] = in.popName().map { case Name(name) => UseSymbol(name) }
 }
