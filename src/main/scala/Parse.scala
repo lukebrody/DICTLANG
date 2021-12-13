@@ -84,7 +84,7 @@ object Value {
     left.flatMap { l =>
       left
         .mapTwo(
-          _.mapTwo(_.mapTwo(_.pop(OpenSquareBracket), term), _.pop(CloseSquareBracket)).map { case ((_, right), _) =>
+          _.mapTwo(_.mapTwo(_.pop(OpenSquareBracket), parse), _.pop(CloseSquareBracket)).map { case ((_, right), _) =>
             SubscriptExpression(l, right)
           },
           subscriptExpr => dotAfter(subscriptExpr) orElse subscriptAfter(subscriptExpr) orElse subscriptExpr
