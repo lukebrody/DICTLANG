@@ -3,7 +3,9 @@ package tokenize
 import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
 
-sealed trait Token
+sealed trait Token {
+  def text: String
+}
 
 object Token {
   def apply(string: String): Try[Seq[Token]] = string match {
@@ -22,21 +24,27 @@ object Token {
 
 case object OpenBracket extends Token {
   def pattern: Regex = """\{(.*)""".r
+  def text = "{"
 }
 
 case object CloseBracket extends Token {
   def pattern: Regex = """\}(.*)""".r
+  def text = "}"
 }
 
 case object Colon extends Token {
   def pattern: Regex = """:(.*)""".r
+  def text = ":"
 }
 
 case object Comma extends Token {
   def pattern: Regex = """,(.*)""".r
+  def text = ","
 }
 
-case class Name(name: String) extends Token
+case class Name(name: String) extends Token {
+  def text = name
+}
 
 object Name {
   def pattern: Regex = "([A-Za-z0-9]+)(.*)".r
@@ -44,18 +52,22 @@ object Name {
 
 case object Backtick extends Token {
   def pattern: Regex = "`(.*)".r
+  def text = "`"
 }
 
 case object Dot extends Token {
   def pattern: Regex = """\.(.*)""".r
+  def text = "."
 }
 
 case object OpenSquareBracket extends Token {
   def pattern: Regex = """\[(.*)""".r
+  def text = "["
 }
 
 case object CloseSquareBracket extends Token {
   def pattern: Regex = """\](.*)""".r
+  def text = "]"
 }
 
 val whitespacePattern = """^\s*(\S*)(.*)$""".r

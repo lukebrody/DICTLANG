@@ -7,7 +7,12 @@ import scala.io.StdIn.readLine
       println(tokens)
       tokens.foreach { tokens =>
         val ast = parse.Value.parse(parse.Success(null, tokens))
-        println(ast)
+
+        ast match {
+          case success: parse.Success[_] if success.rest.isEmpty => println(success)
+          case success: parse.Success[_] => println(parse.Failure("Leftovers", success.rest))
+          case failure: parse.Failure => println(failure)
+        }
       }
   }
 }

@@ -21,12 +21,12 @@ case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
 
   override def pop[T <: Token](token: T): Parsing[T] = rest match {
     case Seq(`token`, rest @ _*) => Success(token, rest)
-    case _                       => Failure
+    case _                       => Failure(s"Expected ${token.text}", rest)
   }
 
   override def popName(): Parsing[Name] = rest match {
     case Seq(Name(name), rest @ _*) => Success(Name(name), rest)
-    case _                          => Failure
+    case _                          => Failure(s"Expected symbol", rest)
   }
 
   override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[A] => Parsing[B]): Parsing[(A, B)] = {
@@ -39,15 +39,18 @@ case class Success[+A](ast: A, rest: Seq[Token]) extends Parsing[A] {
   }
 }
 
-case object Failure extends Parsing[Nothing] {
-  override def map[B](f: Nothing => B): Parsing[B] = Failure
-  override def flatMap[B](f: Nothing => Parsing[B]): Parsing[B] = Failure
-  override def orElse[B >: Nothing](other: => Parsing[B]): Parsing[B] = other
+case class Failure(error: String, rest: Seq[Token]) extends Parsing[Nothing] {
+  override def map[B](f: Nothing => B): Parsing[B] = this
+  override def flatMap[B](f: Nothing => Parsing[B]): Parsing[B] = this
+  override def orElse[B >: Nothing](other: => Parsing[B]): Parsing[B] = other match {
+    case success: Success[B]   => success
+    case otherFailure: Failure => if (otherFailure.rest.length < rest.length) otherFailure else this
+  }
 
-  override def pop[T <: Token](token: T): Parsing[T] = Failure
-  override def popName(): Parsing[Name] = Failure
+  override def pop[T <: Token](token: T): Parsing[T] = this
+  override def popName(): Parsing[Name] = this
 
-  override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[A] => Parsing[B]): Parsing[(A, B)] = Failure
+  override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[A] => Parsing[B]): Parsing[(A, B)] = this
 }
 
 sealed trait Match
@@ -135,7 +138,7 @@ object Dict {
         }
       row.flatMap { r =>
         parsePairs(row) match {
-          case Failure                            => row
+          case _: Failure                         => row
           case success: Success[Seq[Entry[L, R]]] => Success(r ++ success.ast, success.rest)
         }
       }
