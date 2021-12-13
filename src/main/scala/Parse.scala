@@ -50,25 +50,6 @@ case object Failure extends Parsing[Nothing] {
   override def mapTwo[A, B](a: Parsing[_] => Parsing[A], b: Parsing[A] => Parsing[B]): Parsing[(A, B)] = Failure
 }
 
-/*
-
-value{
-  key{value: match{value: match}}: value{key: value{key: value}}
-}
-
-matches move their symbols up their parent
-keys move themselves and their children over to the value, and themselves down to the next entries
-values export their direct children
-
-key (
-  binds,
-  exported
-)
-
-match
-
- */
-
 sealed trait Match
 
 case class MatchDict(entries: Seq[Dict.Entry[Match, Match]]) extends Match
