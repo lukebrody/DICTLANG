@@ -59,7 +59,9 @@ object Dict {
   def parse[L, R](
       in: Parsing[_],
       parseLeft: Parsing[_] => Parsing[L],
-      parseRight: Parsing[_] => Parsing[R]
+      parseRight: Parsing[_] => Parsing[R],
+      openBracket: Token,
+      closeBracket: Token
   ): Parsing[Seq[Entry[L, R]]] = {
 
     def parsePairs(
@@ -77,8 +79,8 @@ object Dict {
       }
     }
 
-    in.mapTwo(_.pop(OpenBracket), _.pop(CloseBracket)).map { _ => Seq.empty } orElse in
-      .mapTwo(_.mapTwo(_.pop(OpenBracket), parsePairs), _.pop(CloseBracket))
+    in.mapTwo(_.pop(openBracket), _.pop(closeBracket)).map { _ => Seq.empty } orElse in
+      .mapTwo(_.mapTwo(_.pop(openBracket), parsePairs), _.pop(closeBracket))
       .map { case ((_, rows), _) =>
         rows
       }

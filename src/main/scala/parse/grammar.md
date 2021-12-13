@@ -1,21 +1,11 @@
-`NewStruct = name:` New structural member (highest `match`)
-
-`BindSymbol = name` Bind value to symbol (`match`)
-
-`UseSymbol = name` Use a symbol (`value`)
-
-`` MatchSymbol = `symbol`` Match value of symbol (`match`)
-
 ```
-Key = StructKey | MatchKey
-StructKey = name:
-MatchKey  = Match =>
-ValueDict = \{ (Key Value,)* \}
+Value = valueTerm (.valueTerm)*
 valueTerm = ValueDict | UseSymbol
-Value = valueTerm (.valueTerm | \[Value\])*
+UseSymbol = name
+ValueDict = { (Match: Value,)* }
 
-MatchDictKey = name:
-MatchDict = \{ (MatchDictKey: Match,)* \}
-matchValue = valueTerm (.valueTerm | \[Value\])+
-Match = MatchDict | MatchSymbol | matchValue | BindSymbol
+Match = Bind | MatchDict | Value
+Bind = `name`
+MatchDict = [ (MatchSymbol: Match,)* ]
+MatchSymbol = name
 ```
