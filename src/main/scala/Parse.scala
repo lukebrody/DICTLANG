@@ -97,10 +97,6 @@ object Value {
     dotAfter(term(in)) orElse subscriptAfter(term(in)) orElse term(in)
   }
 
-  private sealed trait PrimeResult
-
-  private case class DotResult(right: Value, rest: PrimeResult) extends PrimeResult
-  private case class SubscriptResult(right: Value, rest: PrimeResult) extends PrimeResult
 }
 
 object ValueDict {
