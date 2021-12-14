@@ -9,3 +9,11 @@ Bind = `name`
 MatchDict = [ (MatchSymbol: Match,)* ]
 MatchSymbol = name
 ```
+
+```
+[a: [b: `c`], b: c]
+{
+    a: b,
+    b: a
+}
+```

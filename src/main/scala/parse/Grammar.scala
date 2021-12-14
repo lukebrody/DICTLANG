@@ -31,6 +31,8 @@ object UseSymbol {
   def parse(in: Parsing[_]): Parsing[UseSymbol] = in.popName().map { case Name(name) => UseSymbol(name) }
 }
 
+case class Define(name: String) extends Match
+
 case class ValueDict(entries: Seq[Dict.Entry[Match, Value]]) extends Value
 object ValueDict {
   def parse(in: Parsing[_]): Parsing[ValueDict] = {
