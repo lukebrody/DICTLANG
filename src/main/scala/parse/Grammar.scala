@@ -1,105 +1,36 @@
 package parse
 
-import tokenize.*
+class Grammar[A] {
 
-val parsingGrammar = new Grammar[Unit]
+  sealed class AST(info: A)
 
-import parsingGrammar._
+  sealed trait Value
+  case class DotExpression(left: Value, right: Access, info: A) extends AST(info) with Value
+  case class SubscriptExpression(left: Value, right: Value, info: A) extends AST(info) with Value
 
-object Value {
-  private def dotAfter(left: Parsing[Value]): Parsing[DotExpression | SubscriptExpression] = {
-    left.flatMap { l =>
-      left
-        .mapTwo(
-          _.mapTwo(_.pop(Dot), AccessParsing.parse).map { case (_, right) => DotExpression(l, right, ()) },
-          dotExpr => dotAfter(dotExpr) orElse dotExpr
-        )
-        .map(_._2)
-    }
+  case class Reference(name: String, info: A) extends AST(info) with Value
+  case class Access(name: String, info: A) extends AST(info)
+
+  case class ValueDict(entries: Seq[ValueDict.Entry], info: A) extends AST(info) with Value
+
+  object ValueDict {
+    sealed trait Entry
+    case class DefineEntry(define: Define, value: Value) extends Entry
+    case class MatchEntry(pattern: MatchDict, value: Value) extends Entry
   }
 
-  private def subscriptAfter(left: Parsing[Value]): Parsing[DotExpression | SubscriptExpression] = {
-    left.flatMap { l =>
-      left
-        .mapTwo(
-          _.mapTwo(_.mapTwo(_.pop(OpenSquareBracket), parse), _.pop(CloseSquareBracket)).map { case ((_, right), _) =>
-            SubscriptExpression(l, right, ())
-          },
-          subscriptExpr => dotAfter(subscriptExpr) orElse subscriptAfter(subscriptExpr) orElse subscriptExpr
-        )
-        .map(_._2)
-    }
+  case class Define(name: String, info: A) extends AST(info)
+
+  sealed trait Match
+
+  case class Bind(name: String, info: A) extends AST(info) with Match
+
+  case class MatchDict(entries: Seq[MatchDict.Entry], info: A) extends AST(info) with Match
+  object MatchDict {
+    case class Entry(left: Extract, right: Match)
   }
 
-  def parse(in: Parsing[_]): Parsing[Value] = {
-    val term = ReferenceParsing.parse(in) orElse ValueDictParsing.parse(in)
-    dotAfter(term) orElse subscriptAfter(term) orElse term
-  }
+  case class Extract(name: String, info: A) extends AST(info)
 }
 
-object ReferenceParsing {
-  def parse(in: Parsing[_]): Parsing[Reference] = in.popName().map { case Name(name) => Reference(name, ()) }
-}
-
-object AccessParsing {
-  def parse(in: Parsing[_]): Parsing[Access] = in.popName().map { case Name(name) => Access(name, ()) }
-}
-
-object ValueDictParsing {
-
-  object DefineEntry {
-    def parse(in: Parsing[_]): Parsing[ValueDict.DefineEntry] =
-      in.mapTwo(DefineParsing.parse, _.mapTwo(_.pop(Colon), Value.parse)).map { case (define, (_, value)) =>
-        ValueDict.DefineEntry(define, value)
-      }
-  }
-
-  object MatchEntry {
-    def parse(in: Parsing[_]): Parsing[ValueDict.MatchEntry] =
-      in.mapTwo(MatchDictParsing.parse, _.mapTwo(_.pop(DoubleArrow), Value.parse)).map { case (pattern, (_, value)) =>
-        ValueDict.MatchEntry(pattern, value)
-      }
-  }
-
-  def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict
-      .parse[ValueDict.Entry](in, OpenBracket, CloseBracket) { rowIn =>
-        DefineEntry.parse(rowIn) orElse MatchEntry.parse(rowIn)
-      }
-      .map(ValueDict(_, ()))
-  }
-}
-
-object DefineParsing {
-  def parse(in: Parsing[_]): Parsing[Define] = in.popName().map { case Name(name) => Define(name, ()) }
-}
-
-object Match {
-  def parse(in: Parsing[_]): Parsing[Match] = {
-    MatchDictParsing.parse(in) orElse BindParsing.parse(in)
-  }
-}
-
-object BindParsing {
-  def parse(in: Parsing[_]): Parsing[Bind] =
-    in.popName().map { case Name(name) =>
-      Bind(name, ())
-    }
-}
-
-object MatchDictParsing {
-  def parse(in: Parsing[_]): Parsing[MatchDict] = {
-    Dict
-      .parse[MatchDict.Entry](in, OpenSquareBracket, CloseSquareBracket) { rowIn =>
-        rowIn.mapTwo(ExtractParsing.parse, _.mapTwo(_.pop(SingleArrow), Match.parse)).map { case (left, (_, right)) =>
-          MatchDict.Entry(left, right)
-        }
-      }
-      .map(MatchDict(_, ()))
-  }
-}
-
-object ExtractParsing {
-  def parse(in: Parsing[_]): Parsing[Extract] =
-    in.popName().map { case Name(name) => Extract(name, ()) }
-}
+val grammar = new Grammar[Unit]
