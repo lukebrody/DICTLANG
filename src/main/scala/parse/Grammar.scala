@@ -2,7 +2,7 @@ package parse
 
 import tokenize.*
 
-sealed trait Value extends Match
+sealed trait Value
 object Value {
 
   private def term(in: Parsing[_]): Parsing[Value] = UseSymbol.parse(in) orElse ValueDict.parse(in)
@@ -23,49 +23,57 @@ object Value {
   }
 }
 
-case class DotExpression(left: Value, right: Value) extends Value with Match
-case class SubscriptExpression(left: Value, right: Value) extends Value with Match
+case class DotExpression(left: Value, right: Value) extends Value
+case class SubscriptExpression(left: Value, right: Value) extends Value
 
 case class UseSymbol(name: String) extends Value
 object UseSymbol {
   def parse(in: Parsing[_]): Parsing[UseSymbol] = in.popName().map { case Name(name) => UseSymbol(name) }
 }
 
-case class Define(name: String) extends Match
-
 case class ValueDict(entries: Seq[Dict.Entry[Match, Value]]) extends Value
 object ValueDict {
   def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict.parse[Match, Value](in, Match.parse, Value.parse, OpenBracket, CloseBracket).map(ValueDict(_))
+    Dict.parse[Match, Value](in, Match.parse, Value.parse, OpenBracket, CloseBracket, Colon).map(ValueDict(_))
   }
+}
+
+sealed trait Key
+object Key {
+  def parse(in: Parsing[_]): Parsing[Key] = ???
+}
+
+case class Define(name: String) extends Key
+object Define {
+  def parse(in: Parsing[_]): Parsing[Define] = in.popName().map { case Name(name) => Define(name) }
 }
 
 sealed trait Match
 object Match {
   def parse(in: Parsing[_]): Parsing[Match] = {
-    MatchDict.parse(in) orElse Bind.parse(in) orElse Value.parse(in)
+    MatchDict.parse(in) orElse Bind.parse(in)
   }
 }
 
 case class Bind(name: String) extends Match
 object Bind {
   def parse(in: Parsing[_]): Parsing[Bind] =
-    in.mapTwo(_.mapTwo(_.pop(Backtick), _.popName()), _.pop(Backtick)).map { case ((_, Name(name)), _) =>
+    in.popName().map { case Name(name) =>
       Bind(name)
     }
 }
 
-case class MatchDict(entries: Seq[Dict.Entry[MatchSymbol, Match]]) extends Match
+case class MatchDict(entries: Seq[Dict.Entry[Extract, Match]]) extends Match with Key
 object MatchDict {
   def parse(in: Parsing[_]): Parsing[MatchDict] = {
     Dict
-      .parse[MatchSymbol, Match](in, MatchSymbol.parse, Match.parse, OpenSquareBracket, CloseSquareBracket)
+      .parse[Extract, Match](in, Extract.parse, Match.parse, OpenSquareBracket, CloseSquareBracket, Arrow)
       .map(MatchDict(_))
   }
 }
 
-case class MatchSymbol(name: String) extends Match
-object MatchSymbol {
-  def parse(in: Parsing[_]): Parsing[MatchSymbol] =
-    in.popName().map { case Name(name) => MatchSymbol(name) }
+case class Extract(name: String) extends Match
+object Extract {
+  def parse(in: Parsing[_]): Parsing[Extract] =
+    in.popName().map { case Name(name) => Extract(name) }
 }

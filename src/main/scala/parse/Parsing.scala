@@ -61,13 +61,14 @@ object Dict {
       parseLeft: Parsing[_] => Parsing[L],
       parseRight: Parsing[_] => Parsing[R],
       openBracket: Token,
-      closeBracket: Token
+      closeBracket: Token,
+      separator: Token
   ): Parsing[Seq[Entry[L, R]]] = {
 
     def parseRows(
         in: Parsing[_]
     ): Parsing[Seq[Entry[L, R]]] = {
-      val row = in.mapTwo(_.mapTwo(parseLeft, _.pop(Colon)), parseRight).map { case ((l, _), r) =>
+      val row = in.mapTwo(_.mapTwo(parseLeft, _.pop(separator)), parseRight).map { case ((l, _), r) =>
         Seq(Entry(l, r))
       }
 

@@ -2,18 +2,12 @@
 Value = valueTerm (.valueTerm)*
 valueTerm = ValueDict | UseSymbol
 UseSymbol = name
-ValueDict = { (Match: Value,)* }
+ValueDict = { (Key: Value,)* }
+Key = Define | MatchDict
+Define = name
 
-Match = Bind | MatchDict | Value
-Bind = `name`
-MatchDict = [ (MatchSymbol: Match,)* ]
-MatchSymbol = name
-```
-
-```
-[a: [b: `c`], b: c]
-{
-    a: b,
-    b: a
-}
+MatchDict = [ (Extract -> Match,)* ]
+Match = MatchDict | Bind
+Bind = name
+Extract = name
 ```

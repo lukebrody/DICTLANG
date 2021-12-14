@@ -14,10 +14,10 @@ object Token {
     case Colon.pattern(rest)              => tokenize(rest).map(Seq(Colon) ++ _)
     case Comma.pattern(rest)              => tokenize(rest).map(Seq(Comma) ++ _)
     case Name.pattern(name, rest)         => tokenize(rest).map(Seq(Name(name)) ++ _)
-    case Backtick.pattern(rest)           => tokenize(rest).map(Seq(Backtick) ++ _)
     case Dot.pattern(rest)                => tokenize(rest).map(Seq(Dot) ++ _)
     case OpenSquareBracket.pattern(rest)  => tokenize(rest).map(Seq(OpenSquareBracket) ++ _)
     case CloseSquareBracket.pattern(rest) => tokenize(rest).map(Seq(CloseSquareBracket) ++ _)
+    case Arrow.pattern(rest)              => tokenize(rest).map(Seq(Arrow) ++ _)
     case _                                => Failure(new Exception(s"Cannot parse $string"))
   }
 }
@@ -50,11 +50,6 @@ object Name {
   def pattern: Regex = "([A-Za-z0-9]+)(.*)".r
 }
 
-case object Backtick extends Token {
-  def pattern: Regex = "`(.*)".r
-  def text = "`"
-}
-
 case object Dot extends Token {
   def pattern: Regex = """\.(.*)""".r
   def text = "."
@@ -68,6 +63,11 @@ case object OpenSquareBracket extends Token {
 case object CloseSquareBracket extends Token {
   def pattern: Regex = """\](.*)""".r
   def text = "]"
+}
+
+case object Arrow extends Token {
+  def pattern: Regex = """->(.*)""".r
+  def text = "->"
 }
 
 val whitespacePattern = """^\s*(\S*)(.*)$""".r
