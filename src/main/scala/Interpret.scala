@@ -3,21 +3,51 @@ package interpret
 import parse.grammar
 
 sealed trait Value {
-  def access(name: String): Value
+  def access(name: String): Option[Value]
   def evaluate(value: Value): Value
+  def reference(name: String): Option[Value]
 }
 
-case class Symbols(storage: Map[String, Value]) {
-  def apply(name: String): Value = storage(name)
+case object Sentinel extends Value {
+  override def access(name: String): Option[Value] = None
+  override def evaluate(value: Value): Value = ???
+  override def reference(name: String): Option[Value] = None
 }
 
-object Symbols {
-  val empty = Symbols(Map.empty)
+case class ValueDict(parent: Value, entries: Seq[ValueDict.Entry]) extends Value {
+  def define(name: String, value: Value): ValueDict = {
+    assert(reference(name).isEmpty)
+    this.copy(entries = entries ++ Seq(ValueDict.Definition(name, value)))
+  }
+
+  override def access(name: String): Option[Value] = entries.flatMap {
+    case ValueDict.Definition(`name`, value) => Some(value)
+    case _                                   => None
+  }.headOption
+
+  override def evaluate(value: Value): Value = ???
+
+  override def reference(name: String): Option[Value] = access(name) orElse parent.reference(name)
 }
 
-def interpret(ast: grammar.Value, symbols: Symbols): Value = ast match {
-  case grammar.Reference(name, _)                               => symbols(name)
-  case grammar.DotExpression(value, grammar.Access(name, _), _) => interpret(value, symbols).access(name)
+object ValueDict {
+  sealed trait Entry
+  case class Definition(name: String, value: Value) extends Entry
+  case class Function(parent: ValueDict, execute: Value => Option[Value]) extends Entry
+
+  def empty(parent: Value) = ValueDict(parent, Seq.empty)
+}
+
+def interpret(ast: grammar.Value, parent: Value): Value = ast match {
+  case grammar.Reference(name, _)                               => parent.reference(name).get
+  case grammar.DotExpression(value, grammar.Access(name, _), _) => interpret(value, parent).access(name).get
   case grammar.SubscriptExpression(target, argument, _) =>
-    interpret(target, symbols).evaluate(interpret(argument, symbols))
+    interpret(target, parent).evaluate(interpret(argument, parent))
+  case grammar.ValueDict(entries, _) => {
+    entries.foldLeft(ValueDict.empty(parent)) {
+      case (dict, grammar.ValueDict.DefineEntry(grammar.Define(name, _), value)) =>
+        dict.define(name, interpret(value, dict))
+      case (dict, grammar.ValueDict.MatchEntry(_, _)) => ???
+    }
+  }
 }
