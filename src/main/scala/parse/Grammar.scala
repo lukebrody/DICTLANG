@@ -5,45 +5,79 @@ import tokenize.*
 sealed trait Value
 object Value {
 
-  private def term(in: Parsing[_]): Parsing[Value] = UseSymbol.parse(in) orElse ValueDict.parse(in)
-
   private def dotAfter(left: Parsing[Value]): Parsing[DotExpression | SubscriptExpression] = {
     left.flatMap { l =>
       left
         .mapTwo(
-          _.mapTwo(_.pop(Dot), term).map { case (_, right) => DotExpression(l, right) },
+          _.mapTwo(_.pop(Dot), Access.parse).map { case (_, right) => DotExpression(l, right) },
           dotExpr => dotAfter(dotExpr) orElse dotExpr
         )
         .map(_._2)
     }
   }
 
+  private def subscriptAfter(left: Parsing[Value]): Parsing[DotExpression | SubscriptExpression] = {
+    left.flatMap { l =>
+      left
+        .mapTwo(
+          _.mapTwo(_.mapTwo(_.pop(OpenSquareBracket), parse), _.pop(CloseSquareBracket)).map { case ((_, right), _) =>
+            SubscriptExpression(l, right)
+          },
+          subscriptExpr => dotAfter(subscriptExpr) orElse subscriptAfter(subscriptExpr) orElse subscriptExpr
+        )
+        .map(_._2)
+    }
+  }
+
   def parse(in: Parsing[_]): Parsing[Value] = {
-    dotAfter(term(in)) orElse term(in)
+    val term = Reference.parse(in) orElse ValueDict.parse(in)
+    dotAfter(term) orElse subscriptAfter(term) orElse term
   }
 }
 
-case class DotExpression(left: Value, right: Value) extends Value
+case class DotExpression(left: Value, right: Access) extends Value
 case class SubscriptExpression(left: Value, right: Value) extends Value
 
-case class UseSymbol(name: String) extends Value
-object UseSymbol {
-  def parse(in: Parsing[_]): Parsing[UseSymbol] = in.popName().map { case Name(name) => UseSymbol(name) }
+case class Reference(name: String) extends Value
+object Reference {
+  def parse(in: Parsing[_]): Parsing[Reference] = in.popName().map { case Name(name) => Reference(name) }
 }
 
-case class ValueDict(entries: Seq[Dict.Entry[Match, Value]]) extends Value
+case class Access(name: String)
+object Access {
+  def parse(in: Parsing[_]): Parsing[Access] = in.popName().map { case Name(name) => Access(name) }
+}
+
+case class ValueDict(entries: Seq[ValueDict.Entry]) extends Value
 object ValueDict {
+
+  sealed trait Entry
+
+  case class DefineEntry(define: Define, value: Value) extends Entry
+  object DefineEntry {
+    def parse(in: Parsing[_]): Parsing[DefineEntry] = in.mapTwo(Define.parse, _.mapTwo(_.pop(Colon), Value.parse)).map {
+      case (define, (_, value)) => DefineEntry(define, value)
+    }
+  }
+
+  case class MatchEntry(pattern: MatchDict, value: Value) extends Entry
+  object MatchEntry {
+    def parse(in: Parsing[_]): Parsing[MatchEntry] =
+      in.mapTwo(MatchDict.parse, _.mapTwo(_.pop(DoubleArrow), Value.parse)).map { case (pattern, (_, value)) =>
+        MatchEntry(pattern, value)
+      }
+  }
+
   def parse(in: Parsing[_]): Parsing[ValueDict] = {
-    Dict.parse[Match, Value](in, Match.parse, Value.parse, OpenBracket, CloseBracket, Colon).map(ValueDict(_))
+    Dict
+      .parse[Entry](in, OpenBracket, CloseBracket) { rowIn =>
+        DefineEntry.parse(rowIn) orElse MatchEntry.parse(rowIn)
+      }
+      .map(ValueDict(_))
   }
 }
 
-sealed trait Key
-object Key {
-  def parse(in: Parsing[_]): Parsing[Key] = ???
-}
-
-case class Define(name: String) extends Key
+case class Define(name: String)
 object Define {
   def parse(in: Parsing[_]): Parsing[Define] = in.popName().map { case Name(name) => Define(name) }
 }
@@ -63,16 +97,23 @@ object Bind {
     }
 }
 
-case class MatchDict(entries: Seq[Dict.Entry[Extract, Match]]) extends Match with Key
+case class MatchDict(entries: Seq[MatchDict.Entry]) extends Match
 object MatchDict {
+
+  case class Entry(left: Extract, right: Match)
+
   def parse(in: Parsing[_]): Parsing[MatchDict] = {
     Dict
-      .parse[Extract, Match](in, Extract.parse, Match.parse, OpenSquareBracket, CloseSquareBracket, Arrow)
+      .parse[Entry](in, OpenSquareBracket, CloseSquareBracket) { rowIn =>
+        rowIn.mapTwo(Extract.parse, _.mapTwo(_.pop(SingleArrow), Match.parse)).map { case (left, (_, right)) =>
+          Entry(left, right)
+        }
+      }
       .map(MatchDict(_))
   }
 }
 
-case class Extract(name: String) extends Match
+case class Extract(name: String)
 object Extract {
   def parse(in: Parsing[_]): Parsing[Extract] =
     in.popName().map { case Name(name) => Extract(name) }

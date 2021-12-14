@@ -54,23 +54,16 @@ case class Failure(error: String, rest: Seq[Token]) extends Parsing[Nothing] {
 }
 
 object Dict {
-  case class Entry[L, R](left: L, right: R)
-
-  def parse[L, R](
+  def parse[A](
       in: Parsing[_],
-      parseLeft: Parsing[_] => Parsing[L],
-      parseRight: Parsing[_] => Parsing[R],
-      openBracket: Token,
-      closeBracket: Token,
-      separator: Token
-  ): Parsing[Seq[Entry[L, R]]] = {
+      open: Token,
+      close: Token
+  )(parseRow: Parsing[_] => Parsing[A]): Parsing[Seq[A]] = {
 
     def parseRows(
         in: Parsing[_]
-    ): Parsing[Seq[Entry[L, R]]] = {
-      val row = in.mapTwo(_.mapTwo(parseLeft, _.pop(separator)), parseRight).map { case ((l, _), r) =>
-        Seq(Entry(l, r))
-      }
+    ): Parsing[Seq[A]] = {
+      val row = parseRow(in).map(Seq(_))
 
       val nextRow = row.flatMap { rowValue =>
         row.mapTwo(_.pop(Comma), parseRows).map { case (_, rows) => rowValue ++ rows }
@@ -79,6 +72,6 @@ object Dict {
       nextRow orElse row orElse in.map { _ => Seq.empty }
     }
 
-    in.mapTwo(_.mapTwo(_.pop(openBracket), parseRows), _.pop(closeBracket)).map { case ((_, value), _) => value }
+    in.mapTwo(_.mapTwo(_.pop(open), parseRows), _.pop(close)).map { case ((_, value), _) => value }
   }
 }

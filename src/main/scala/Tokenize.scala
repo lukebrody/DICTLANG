@@ -17,7 +17,8 @@ object Token {
     case Dot.pattern(rest)                => tokenize(rest).map(Seq(Dot) ++ _)
     case OpenSquareBracket.pattern(rest)  => tokenize(rest).map(Seq(OpenSquareBracket) ++ _)
     case CloseSquareBracket.pattern(rest) => tokenize(rest).map(Seq(CloseSquareBracket) ++ _)
-    case Arrow.pattern(rest)              => tokenize(rest).map(Seq(Arrow) ++ _)
+    case SingleArrow.pattern(rest)        => tokenize(rest).map(Seq(SingleArrow) ++ _)
+    case DoubleArrow.pattern(rest)        => tokenize(rest).map(Seq(DoubleArrow) ++ _)
     case _                                => Failure(new Exception(s"Cannot parse $string"))
   }
 }
@@ -65,9 +66,14 @@ case object CloseSquareBracket extends Token {
   def text = "]"
 }
 
-case object Arrow extends Token {
+case object SingleArrow extends Token {
   def pattern: Regex = """->(.*)""".r
   def text = "->"
+}
+
+case object DoubleArrow extends Token {
+  def pattern: Regex = """=>(.*)""".r
+  def text = "=>"
 }
 
 val whitespacePattern = """^\s*(\S*)(.*)$""".r
