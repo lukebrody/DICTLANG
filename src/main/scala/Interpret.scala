@@ -4,21 +4,19 @@ import parse.grammar
 
 sealed trait Value {
   def access(name: String): Option[Value]
-  def evaluate(value: Value): Value
+  def evaluate(value: Value): Option[Value]
   def reference(name: String): Option[Value]
 }
 
 case object Sentinel extends Value {
   override def access(name: String): Option[Value] = None
-  override def evaluate(value: Value): Value = ???
+  override def evaluate(value: Value): Option[Value] = ???
   override def reference(name: String): Option[Value] = None
 }
 
 case class ValueDict(parent: Value, entries: Seq[ValueDict.Entry]) extends Value {
-  def define(name: String, value: Value): ValueDict = {
-    assert(reference(name).isEmpty)
-    this.copy(entries = entries ++ Seq(ValueDict.Definition(name, value)))
-  }
+
+  def append(entry: ValueDict.Entry) = this.copy(entries = entries ++ Seq(entry))
 
   override def access(name: String): Option[Value] = entries.flatMap {
     case ValueDict.Definition(`name`, value) => Some(value)
@@ -33,7 +31,7 @@ case class ValueDict(parent: Value, entries: Seq[ValueDict.Entry]) extends Value
 object ValueDict {
   sealed trait Entry
   case class Definition(name: String, value: Value) extends Entry
-  case class Function(parent: ValueDict, execute: Value => Option[Value]) extends Entry
+  case class Function(parent: ValueDict, pattern: grammar.MatchDict, ) extends Entry with Value {}
 
   def empty(parent: Value) = ValueDict(parent, Seq.empty)
 }
@@ -46,8 +44,8 @@ def interpret(ast: grammar.Value, parent: Value): Value = ast match {
   case grammar.ValueDict(entries, _) => {
     entries.foldLeft(ValueDict.empty(parent)) {
       case (dict, grammar.ValueDict.DefineEntry(grammar.Define(name, _), value)) =>
-        dict.define(name, interpret(value, dict))
-      case (dict, grammar.ValueDict.MatchEntry(_, _)) => ???
+        dict.append(ValueDict.Definition(name, interpret(value, dict)))
+      case (dict, grammar.ValueDict.MatchEntry(pattern, contents)) => dict.append(ValueDict.Function(dict, ))
     }
   }
 }
